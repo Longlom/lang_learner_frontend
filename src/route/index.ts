@@ -3,6 +3,7 @@ import { Path } from "../utils/routeExtractor"
 import { indexHandler } from "./indexHandler";
 import { pingHandler } from "./pingHandler";
 import { loginHandler } from "./loginRoute";
+import { downloadHandler } from "./donwloadHandler";
 
 export type IRouteHandler = (req: IncomingMessage, res: ServerResponse<IncomingMessage>) => Promise<void>
 
@@ -13,6 +14,7 @@ const routeHandlersMap: IRouteHandlersMap = {
     "/": indexHandler,
     "/ping": pingHandler,
     "/login": loginHandler,
+    "/download": downloadHandler,
 };
 
 
