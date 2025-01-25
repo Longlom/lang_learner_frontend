@@ -16,7 +16,8 @@
 
         const linkText = link.value;
 
-        const postReq = fetch("http://127.0.0.1:3030/download", {
+        const url = `${document.location.origin}/download`
+        const postReq = fetch(url, {
           method: "POST",
           body: JSON.stringify({
             url: linkText,
