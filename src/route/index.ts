@@ -4,6 +4,7 @@ import { indexHandler } from "./indexHandler";
 import { pingHandler } from "./pingHandler";
 import { loginHandler } from "./loginRoute";
 import { downloadHandler } from "./donwloadHandler";
+import { downloadFormRouteHandler } from "./downloadFormRoute";
 
 export type IRouteHandler = (req: IncomingMessage, res: ServerResponse<IncomingMessage>) => Promise<void>
 
@@ -15,6 +16,7 @@ const routeHandlersMap: IRouteHandlersMap = {
     "/ping": pingHandler,
     "/login": loginHandler,
     "/download": downloadHandler,
+    "/downloadForm": downloadFormRouteHandler,
 };
 
 

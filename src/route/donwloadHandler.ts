@@ -1,3 +1,5 @@
+import mime from 'mime';
+
 import { IncomingMessage } from "http";
 import { IRouteHandler } from ".";
 
@@ -6,9 +8,10 @@ import { resolve } from "path";
 
 import { createReadStream, existsSync, statSync } from "fs";
 
-const BASE_UPLOAD_DIR = "disk:/Chinese";
+const BASE_UPLOAD_DIR = "/Chinese";
 const YA_API_OATH = "y0__xDAn5w3GI_UNCCC-c2MElRZ8g2KK3SXGq13JwLOcetm0yMD";
 const UPLOAD_URL = "https://cloud-api.yandex.net/v1/disk/resources/upload";
+const DISK_RES_URL = "https://cloud-api.yandex.net/v1/disk/resources";
 
 async function getBody(req: IncomingMessage): Promise<string> {
   return await new Promise((res) => {
@@ -43,6 +46,168 @@ const bulkDownload = async (page: Page) => {
   return downloads;
 };
 
+const uploadToDisk = async (files: Download[]) => {
+  const processedFileObjects = files.map((f) => {
+    const filename = f.suggestedFilename();
+    const dirName = `${filename.slice(9, 11)}.${filename.slice(7, 9)}`;
+
+    const dirPath = `${BASE_UPLOAD_DIR}/${dirName}`;
+    const filePath = `${dirPath}/${filename}`;
+
+    return {
+      file: f,
+      filename,
+      filePath,
+      dirPath,
+      dirName,
+    };
+  });
+
+  console.log('processedFileObjects - ', processedFileObjects);
+
+  for (const fileObj of processedFileObjects) {
+    const checkPathUrl = new URL(DISK_RES_URL);
+    checkPathUrl.searchParams.append("path", "Chinese");
+    checkPathUrl.searchParams.append("fields", "_embedded.items.name");
+    const checkDirs = await fetch(checkPathUrl, {
+      headers: {
+        Authorization:
+          "OAuth y0__xDAn5w3GI_UNCCC-c2MElRZ8g2KK3SXGq13JwLOcetm0yMD",
+      },
+    });
+    if (!(checkDirs.ok && checkDirs.status === 200)) {
+      console.log('Error on checking dir -', fileObj, checkPathUrl);
+      continue;
+    }
+
+    const checkDirsRes: any = await checkDirs.json();
+    console.log("checkDirsRes - ", checkDirsRes);
+    const isDirExist = checkDirsRes._embedded.items.find(
+      (item: any) => item.name === fileObj.dirName
+    );
+    console.log("isDirExist - ", isDirExist, fileObj);
+
+    if (!isDirExist) {
+      const createDirUrl = new URL(DISK_RES_URL);
+      createDirUrl.searchParams.append("path", `/Chinese/${fileObj.dirName}`);
+      const createDirOp = await fetch(createDirUrl, {
+        method: "PUT",
+        headers: {
+          Authorization:
+            "OAuth y0__xDAn5w3GI_UNCCC-c2MElRZ8g2KK3SXGq13JwLOcetm0yMD",
+        },
+      });
+
+      if (!(createDirOp.ok && createDirOp.status === 201)) {
+        console.log("unable to create dir - ", fileObj);
+        continue;
+      }
+    }
+
+    console.log("starting to upload file");
+
+    const fetchUploadLinkUrl = new URL(UPLOAD_URL);
+    fetchUploadLinkUrl.searchParams.append("path", fileObj.filePath);
+    console.log("fetchUploadLinkUrl -", fetchUploadLinkUrl);
+
+    const uploadLink = await fetch(fetchUploadLinkUrl, {
+      headers: {
+        Authorization:
+          "OAuth y0__xDAn5w3GI_UNCCC-c2MElRZ8g2KK3SXGq13JwLOcetm0yMD",
+      },
+    });
+    if (!(uploadLink.ok && uploadLink.status === 200)) {
+      console.log("unable to get upload link to ", uploadLink, fileObj);
+      continue;
+    }
+
+    const responseData: any = await uploadLink.json();
+    console.log("responseData -", responseData);
+
+    const uploadFileUrl = responseData.href;
+    const localPathToFile = resolve(`./files/${fileObj.filename}`);
+    const stats = statSync(localPathToFile);
+
+    const mimeType = mime.getType(localPathToFile);
+    const fileSizeInBytes = stats.size;
+    const readStream = createReadStream(localPathToFile);
+    console.log("stats -", stats);
+    console.log("mimeType -", mimeType);
+
+    const uploadFileOperation = await fetch(uploadFileUrl, {
+      method: "PUT",
+      headers: {
+        // "Content-Length": `${fileSizeInBytes}`,
+        'Content-Type': mimeType || '',
+      },
+      body: readStream,
+      duplex: "half",
+    });
+
+    console.log(uploadFileOperation);
+
+    if (uploadFileOperation.status !== 201) {
+      console.log(`Didnt upload file to url - ${uploadFileUrl}, file - ${fileObj}`, uploadFileOperation);
+      continue;
+    }
+
+
+  }
+
+  // const dateStr = files[0].suggestedFilename();
+  // console.log("dateStr", dateStr);
+
+  // const uploadDirsName = filteredDownloadedFiles.map((d)z);
+
+  // const dashedDateStr = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`
+
+  // const dirName =
+  //   `/${dateStr.slice(6, 8)}-${dateStr.slice(4, 6)}`;
+
+  // const pathToUpload = BASE_UPLOAD_DIR + dirName;
+
+  // const fetchUploadLinkUrl = new URL(UPLOAD_URL);
+  // fetchUploadLinkUrl.searchParams.append("path", pathToUpload);
+
+  // const uploadLink = await fetch(fetchUploadLinkUrl, {
+  //   headers: {
+  //     Authorization:
+  //       "OAuth y0__xDAn5w3GI_UNCCC-c2MElRZ8g2KK3SXGq13JwLOcetm0yMD",
+  //   },
+  // });
+
+  // if (!uploadLink.ok) {
+  //   return;
+  // }
+
+  // let responseData: any = await uploadLink.json();
+
+  // console.log("responseData -", responseData);
+
+  // const uploadFileUrl = responseData.href;
+
+  // const filenames = filteredDownloadedFiles.map((d) => d.suggestedFilename());
+
+  // for (const name of filenames) {
+  //   const path = resolve(`./files/${name}`);
+
+  //   const stats = statSync(path);
+  //   const fileSizeInBytes = stats.size;
+  //   let readStream = createReadStream(path);
+
+  //   const uploadFileOperation = await fetch(uploadFileUrl, {
+  //     method: "PUT",
+  //     headers: {
+  //       "Content-Length": `${fileSizeInBytes}`,
+  //     },
+  //     body: readStream,
+  //     duplex: "half",
+  //   });
+
+  //   console.log(uploadFileOperation);
+  // }
+};
+
 const downloadHandler: IRouteHandler = async (req, res) => {
   // console.log(req.body);
 
@@ -52,15 +217,15 @@ const downloadHandler: IRouteHandler = async (req, res) => {
 
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/plain");
-  res.end("Hello, World! \n");
+  res.end("Request for download accepted \n");
 
   console.log(bodyJsonParsed);
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch({ headless: false });
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(bodyJsonParsed.url);
 
-  await page.waitForSelector("a.download-btn", { timeout: 1000 });
+  await page.waitForSelector("a.download-btn", { timeout: 10000 });
 
   const downloads: Download[] = await bulkDownload(page);
   const downloadedFileNames = downloads.map((download) =>
@@ -94,59 +259,10 @@ const downloadHandler: IRouteHandler = async (req, res) => {
     return;
   }
 
-  const dateStr = filteredDownloadedFiles[0].suggestedFilename();
-  console.log("dateStr", dateStr);
+  await uploadToDisk(filteredDownloadedFiles);
 
-  const uploadDirsName = filteredDownloadedFiles.map((d)z);
+  console.log("END AFTER UPLOAD DISk");
 
-  // const dashedDateStr = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`
-
-  const dirName =
-    `/${dateStr.slice(6, 8)}-${dateStr.slice(4, 6)}`;
-
-  const pathToUpload = BASE_UPLOAD_DIR + dirName;
-
-  const fetchUploadLinkUrl = new URL(UPLOAD_URL);
-  fetchUploadLinkUrl.searchParams.append("path", pathToUpload);
-
-  const uploadLink = await fetch(fetchUploadLinkUrl, {
-    headers: {
-      Authorization:
-        "OAuth y0__xDAn5w3GI_UNCCC-c2MElRZ8g2KK3SXGq13JwLOcetm0yMD",
-    },
-  });
-
-  if (!uploadLink.ok) {
-    return;
-  }
-
-  let responseData: any = await uploadLink.json();
-
-  console.log("responseData -", responseData);
-
-  const uploadFileUrl = responseData.href;
-
-  const filenames = filteredDownloadedFiles.map((d) => d.suggestedFilename());
-
-  for (const name of filenames) {
-    const path = resolve(`./files/${name}`);
-
-
-    const stats = statSync(path);
-    const fileSizeInBytes = stats.size;
-    let readStream = createReadStream(path);
-
-    const uploadFileOperation = await fetch(uploadFileUrl, {
-      method: "PUT",
-      headers: {
-        "Content-Length": `${fileSizeInBytes}`,
-      },
-      body: readStream,
-      duplex: 'half',
-    });
-
-    console.log(uploadFileOperation);
-  }
   return;
 };
 

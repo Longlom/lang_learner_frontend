@@ -11,6 +11,7 @@
   "author": "long.lom",
   "license": "ISC",
   "devDependencies": {
+    "@types/mime": "^3.0.4",
     "@types/node": "^22.9.0",
     "nodemon": "^3.1.7",
     "rimraf": "^6.0.1",
@@ -18,6 +19,7 @@
     "typescript": "^5.6.3"
   },
   "dependencies": {
+    "mime": "^3.0.0",
     "playwright": "^1.50.0"
   }
 }
