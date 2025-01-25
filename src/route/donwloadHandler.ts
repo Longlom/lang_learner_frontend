@@ -13,6 +13,8 @@ const YA_API_OATH = "y0__xDAn5w3GI_UNCCC-c2MElRZ8g2KK3SXGq13JwLOcetm0yMD";
 const UPLOAD_URL = "https://cloud-api.yandex.net/v1/disk/resources/upload";
 const DISK_RES_URL = "https://cloud-api.yandex.net/v1/disk/resources";
 
+const AUTH_TOKEN = ''
+
 async function getBody(req: IncomingMessage): Promise<string> {
   return await new Promise((res) => {
     const bodyParts: Uint8Array[] = [];
@@ -71,8 +73,7 @@ const uploadToDisk = async (files: Download[]) => {
     checkPathUrl.searchParams.append("fields", "_embedded.items.name");
     const checkDirs = await fetch(checkPathUrl, {
       headers: {
-        Authorization:
-          "OAuth y0__xDAn5w3GI_UNCCC-c2MElRZ8g2KK3SXGq13JwLOcetm0yMD",
+        Authorization: AUTH_TOKEN
       },
     });
     if (!(checkDirs.ok && checkDirs.status === 200)) {
@@ -93,8 +94,7 @@ const uploadToDisk = async (files: Download[]) => {
       const createDirOp = await fetch(createDirUrl, {
         method: "PUT",
         headers: {
-          Authorization:
-            "OAuth y0__xDAn5w3GI_UNCCC-c2MElRZ8g2KK3SXGq13JwLOcetm0yMD",
+          Authorization:AUTH_TOKEN
         },
       });
 
@@ -112,8 +112,7 @@ const uploadToDisk = async (files: Download[]) => {
 
     const uploadLink = await fetch(fetchUploadLinkUrl, {
       headers: {
-        Authorization:
-          "OAuth y0__xDAn5w3GI_UNCCC-c2MElRZ8g2KK3SXGq13JwLOcetm0yMD",
+        Authorization:AUTH_TOKEN
       },
     });
     if (!(uploadLink.ok && uploadLink.status === 200)) {
@@ -154,58 +153,6 @@ const uploadToDisk = async (files: Download[]) => {
 
   }
 
-  // const dateStr = files[0].suggestedFilename();
-  // console.log("dateStr", dateStr);
-
-  // const uploadDirsName = filteredDownloadedFiles.map((d)z);
-
-  // const dashedDateStr = `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`
-
-  // const dirName =
-  //   `/${dateStr.slice(6, 8)}-${dateStr.slice(4, 6)}`;
-
-  // const pathToUpload = BASE_UPLOAD_DIR + dirName;
-
-  // const fetchUploadLinkUrl = new URL(UPLOAD_URL);
-  // fetchUploadLinkUrl.searchParams.append("path", pathToUpload);
-
-  // const uploadLink = await fetch(fetchUploadLinkUrl, {
-  //   headers: {
-  //     Authorization:
-  //       "OAuth y0__xDAn5w3GI_UNCCC-c2MElRZ8g2KK3SXGq13JwLOcetm0yMD",
-  //   },
-  // });
-
-  // if (!uploadLink.ok) {
-  //   return;
-  // }
-
-  // let responseData: any = await uploadLink.json();
-
-  // console.log("responseData -", responseData);
-
-  // const uploadFileUrl = responseData.href;
-
-  // const filenames = filteredDownloadedFiles.map((d) => d.suggestedFilename());
-
-  // for (const name of filenames) {
-  //   const path = resolve(`./files/${name}`);
-
-  //   const stats = statSync(path);
-  //   const fileSizeInBytes = stats.size;
-  //   let readStream = createReadStream(path);
-
-  //   const uploadFileOperation = await fetch(uploadFileUrl, {
-  //     method: "PUT",
-  //     headers: {
-  //       "Content-Length": `${fileSizeInBytes}`,
-  //     },
-  //     body: readStream,
-  //     duplex: "half",
-  //   });
-
-  //   console.log(uploadFileOperation);
-  // }
 };
 
 const downloadHandler: IRouteHandler = async (req, res) => {
