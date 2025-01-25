@@ -7,7 +7,6 @@ const hostname = "127.0.0.1";
 const port = 3030;
 
 const server = http.createServer(async (req, res) => {
-  // req.method
 
   const path = routeExtractor(req);
 

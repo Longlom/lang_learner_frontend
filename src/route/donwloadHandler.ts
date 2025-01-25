@@ -1,5 +1,4 @@
 import mime from 'mime';
-
 import { IncomingMessage } from "http";
 import { IRouteHandler } from ".";
 
@@ -8,12 +7,12 @@ import { resolve } from "path";
 
 import { createReadStream, existsSync, statSync } from "fs";
 
+require('dotenv').config();
+
 const BASE_UPLOAD_DIR = "/Chinese";
-const YA_API_OATH = "y0__xDAn5w3GI_UNCCC-c2MElRZ8g2KK3SXGq13JwLOcetm0yMD";
 const UPLOAD_URL = "https://cloud-api.yandex.net/v1/disk/resources/upload";
 const DISK_RES_URL = "https://cloud-api.yandex.net/v1/disk/resources";
-
-const AUTH_TOKEN = ''
+const AUTH_TOKEN = `OAuth ${process.env.YA_DISK_TOKEN}`
 
 async function getBody(req: IncomingMessage): Promise<string> {
   return await new Promise((res) => {
@@ -65,8 +64,6 @@ const uploadToDisk = async (files: Download[]) => {
     };
   });
 
-  console.log('processedFileObjects - ', processedFileObjects);
-
   for (const fileObj of processedFileObjects) {
     const checkPathUrl = new URL(DISK_RES_URL);
     checkPathUrl.searchParams.append("path", "Chinese");
@@ -78,15 +75,14 @@ const uploadToDisk = async (files: Download[]) => {
     });
     if (!(checkDirs.ok && checkDirs.status === 200)) {
       console.log('Error on checking dir -', fileObj, checkPathUrl);
+      console.log('checkDirs -', checkDirs);
       continue;
     }
 
     const checkDirsRes: any = await checkDirs.json();
-    console.log("checkDirsRes - ", checkDirsRes);
     const isDirExist = checkDirsRes._embedded.items.find(
       (item: any) => item.name === fileObj.dirName
     );
-    console.log("isDirExist - ", isDirExist, fileObj);
 
     if (!isDirExist) {
       const createDirUrl = new URL(DISK_RES_URL);
@@ -108,7 +104,6 @@ const uploadToDisk = async (files: Download[]) => {
 
     const fetchUploadLinkUrl = new URL(UPLOAD_URL);
     fetchUploadLinkUrl.searchParams.append("path", fileObj.filePath);
-    console.log("fetchUploadLinkUrl -", fetchUploadLinkUrl);
 
     const uploadLink = await fetch(fetchUploadLinkUrl, {
       headers: {
@@ -121,7 +116,6 @@ const uploadToDisk = async (files: Download[]) => {
     }
 
     const responseData: any = await uploadLink.json();
-    console.log("responseData -", responseData);
 
     const uploadFileUrl = responseData.href;
     const localPathToFile = resolve(`./files/${fileObj.filename}`);
@@ -130,8 +124,6 @@ const uploadToDisk = async (files: Download[]) => {
     const mimeType = mime.getType(localPathToFile);
     const fileSizeInBytes = stats.size;
     const readStream = createReadStream(localPathToFile);
-    console.log("stats -", stats);
-    console.log("mimeType -", mimeType);
 
     const uploadFileOperation = await fetch(uploadFileUrl, {
       method: "PUT",
@@ -139,11 +131,13 @@ const uploadToDisk = async (files: Download[]) => {
         // "Content-Length": `${fileSizeInBytes}`,
         'Content-Type': mimeType || '',
       },
+      // @ts-ignore
       body: readStream,
       duplex: "half",
     });
 
-    console.log(uploadFileOperation);
+    console.log('Uploaded file');
+
 
     if (uploadFileOperation.status !== 201) {
       console.log(`Didnt upload file to url - ${uploadFileUrl}, file - ${fileObj}`, uploadFileOperation);
@@ -156,9 +150,8 @@ const uploadToDisk = async (files: Download[]) => {
 };
 
 const downloadHandler: IRouteHandler = async (req, res) => {
-  // console.log(req.body);
-
   const body = await getBody(req);
+  console.log('AUTH_TOKEN - ', AUTH_TOKEN)
 
   const bodyJsonParsed = JSON.parse(body);
 
@@ -166,8 +159,7 @@ const downloadHandler: IRouteHandler = async (req, res) => {
   res.setHeader("Content-Type", "text/plain");
   res.end("Request for download accepted \n");
 
-  console.log(bodyJsonParsed);
-  const browser = await chromium.launch({ headless: false });
+  const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(bodyJsonParsed.url);
@@ -179,16 +171,8 @@ const downloadHandler: IRouteHandler = async (req, res) => {
     download.suggestedFilename()
   );
 
-  console.log("downloadedFileNames - ", downloadedFileNames);
   const filteredDownloadedFiles = downloads.filter(
     (d) => !existsSync(resolve(`./files/${d.suggestedFilename()}`))
-  );
-
-  console.log("filteredDownloadedFiles - ", filteredDownloadedFiles);
-
-  console.log(
-    "filteredDownloadedFiles - ",
-    filteredDownloadedFiles.forEach((d) => console.log(d.suggestedFilename()))
   );
 
   await Promise.all(
@@ -196,10 +180,8 @@ const downloadHandler: IRouteHandler = async (req, res) => {
       d.saveAs(resolve(`./files/${d.suggestedFilename()}`))
     )
   );
-  // await page.waitForTimeout(30000);
 
   await browser.close();
-  console.log("closing browser");
 
   if (!filteredDownloadedFiles.length) {
     console.log("END because zero filtered");
