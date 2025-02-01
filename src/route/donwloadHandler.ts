@@ -68,6 +68,7 @@ const uploadToDisk = async (files: Download[]) => {
     const checkPathUrl = new URL(DISK_RES_URL);
     checkPathUrl.searchParams.append("path", "Chinese");
     checkPathUrl.searchParams.append("fields", "_embedded.items.name");
+    checkPathUrl.searchParams.append("limit", "100");
     const checkDirs = await fetch(checkPathUrl, {
       headers: {
         Authorization: AUTH_TOKEN
