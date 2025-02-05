@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="./styles/chineseFormDictionary.css" />
+    <title>Login</title>
+
+    <script>
+      // function upload(e) {
+      //   e.preventDefault();
+
+      //   const link = document.getElementById("link");
+
+      //   console.log(link);
+
+      //   const linkText = link.value;
+
+      //   const url = `${document.location.origin}/download`
+      //   const postReq = fetch(url, {
+      //     method: "POST",
+      //     body: JSON.stringify({
+      //       url: linkText,
+      //     }),
+      //   })
+      //     .then((res) => res.json())
+      //     .then((res) => console.log(res));
+      // }
+
+      // window.addEventListener("DOMContentLoaded", () => {
+      //   document
+      //     .querySelector(".main-form__button")
+      //     .addEventListener("click", upload);
+      // });
+    </script>
+  </head>
+  <body>
+    <header class="header">
+      <div class="header__title"><strong>Language Learning</strong></div>
+      <div class="header__navs">
+        <a class="header__link" href="#">Home</a>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="main-header">
+        <h2 class="main-header__h2">Language Learning</h2>
+      </div>
+
+      <form class="main-form">
+        <div class="main-form__field">
+          <label class="main-form__label" for="username">URL</label>
+          <input
+            class="main-form__input"
+            type="text"
+            name="link"
+            id="link"
+            placeholder="Enter your url"
+          />
+        </div>
+        <button class="main-form__button" type="submit">Submit</button>
+      </form>
+    </main>
+  </body>
+</html>

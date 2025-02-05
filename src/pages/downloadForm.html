@@ -11,16 +11,17 @@
         e.preventDefault();
 
         const link = document.getElementById("link");
-
-        console.log(link);
-
         const linkText = link.value;
+
+        const pass = document.getElementById("pass");
+        const passText = pass.value;
 
         const url = `${document.location.origin}/download`
         const postReq = fetch(url, {
           method: "POST",
           body: JSON.stringify({
             url: linkText,
+            password: passText,
           }),
         })
           .then((res) => res.json())
@@ -57,6 +58,15 @@
             id="link"
             placeholder="Enter your url"
           />
+        </div>
+
+        <input
+          class="main-form__input"
+          type="text"
+          name="link"
+          id="pass"
+          placeholder="Enter your password"
+        />
         </div>
         <button class="main-form__button" type="submit">Submit</button>
       </form>
