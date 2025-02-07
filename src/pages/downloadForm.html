@@ -16,7 +16,7 @@
         const pass = document.getElementById("pass");
         const passText = pass.value;
 
-        const url = `${document.location.origin}/download`
+        const url = `${document.location.origin}/download`;
         const postReq = fetch(url, {
           method: "POST",
           body: JSON.stringify({
@@ -28,10 +28,34 @@
           .then((res) => console.log(res));
       }
 
-      window.addEventListener("DOMContentLoaded", () => {
+      window.addEventListener("DOMContentLoaded", async () => {
         document
           .querySelector(".main-form__button")
           .addEventListener("click", upload);
+
+        const downloadDataUrl = `${document.location.origin}/downloadData`;
+
+        const data = await fetch(downloadDataUrl);
+        const parsedData = await data.json();
+        Object.keys(parsedData).forEach((name) => {
+          const nameNode = document.createElement("td");
+          nameNode.classList.add("downloadFile-table__cell");
+          nameNode.innerText = name;
+          const stateNode = document.createElement("td");
+          stateNode.classList.add("downloadFile-table__cell");
+          stateNode.innerText = parsedData[name].STATE;
+          const infoNode = document.createElement("td");
+          infoNode.classList.add("downloadFile-table__cell");
+          infoNode.innerText = JSON.stringify(parsedData[name].info);
+
+          const rowNode = document.createElement("tr");
+          rowNode.appendChild(nameNode);
+          rowNode.appendChild(stateNode);
+          rowNode.appendChild(infoNode);
+          document
+            .querySelector(".downloadFile-table__body")
+            .appendChild(rowNode);
+        });
       });
     </script>
   </head>
@@ -43,14 +67,24 @@
       </div>
     </header>
 
+    <table class="downloadFile-table">
+      <thead>
+        <tr>
+          <th class="">Название</th>
+          <th class="">Состояние</th>
+          <th class="">Доп. инфа</th>
+        </tr>
+      </thead>
+      <tbody class="downloadFile-table__body"></tbody>
+    </table>
+
     <main class="main">
       <div class="main-header">
-        <h2 class="main-header__h2">Input the zoom url!</h2>
+        <h2 class="main-header__h2">Download file</h2>
       </div>
 
       <form class="main-form">
         <div class="main-form__field">
-          <label class="main-form__label" for="username">URL</label>
           <input
             class="main-form__input"
             type="text"
@@ -67,7 +101,6 @@
           id="pass"
           placeholder="Enter your password"
         />
-        </div>
         <button class="main-form__button" type="submit">Submit</button>
       </form>
     </main>

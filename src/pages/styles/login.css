@@ -104,3 +104,19 @@
   background-color: var(--primary-hover);
   border-color: var(--primary-hover);
 }
+
+.downloadFile-table {
+  margin: 0 auto;
+}
+
+td {
+  border-color: black;
+  border-style: solid;
+  border-width: 1px;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  overflow: hidden;
+  padding: 10px 5px;
+  word-break: normal;
+  text-align: center;
+}

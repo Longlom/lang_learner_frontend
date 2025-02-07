@@ -1,17 +1,22 @@
 import mime from "mime";
 import { IncomingMessage } from "http";
-import { IRouteHandler } from ".";
+import { IRouteHandler } from "..";
 
 import { chromium, Download, Page } from "playwright";
 import { resolve } from "path";
 
 import {
   createReadStream,
-  existsSync,
-  readFileSync,
   statSync,
-  writeFileSync,
 } from "fs";
+import {
+  DOWNLOAD_STATE,
+  getBody,
+  readFromDB,
+  writeStateToDB,
+} from "./utils";
+import axios from "axios";
+import { IExisitingDirs, IUploadLink } from "./types";
 
 require("dotenv").config();
 
@@ -20,53 +25,9 @@ const UPLOAD_URL = "https://cloud-api.yandex.net/v1/disk/resources/upload";
 const DISK_RES_URL = "https://cloud-api.yandex.net/v1/disk/resources";
 const AUTH_TOKEN = `OAuth ${process.env.YA_DISK_TOKEN}`;
 
-const PATH_TO_DOWNLOAD_STATE = resolve(`./db/downloadFileState.json`);
-
-export const DOWNLOAD_STATE = {
-  SAVED: "SAVED",
-  ERROR: "ERROR",
-  UPLOADING: "UPLOADING",
-} as const;
-
-const writeToDB = (objToWrite: Object) => {
-  const objString = JSON.stringify(objToWrite);
-  writeFileSync(PATH_TO_DOWNLOAD_STATE, objString);
+const AUTH_HEADER = {
+  Authorization: AUTH_TOKEN,
 };
-
-const readFromDB = () => {
-  const dfState = JSON.parse(readFileSync(PATH_TO_DOWNLOAD_STATE).toString());
-  return dfState;
-};
-
-const writeStateToDB = (
-  filename: string,
-  state: keyof typeof DOWNLOAD_STATE,
-  info?: object
-) => {
-  const dfState = readFromDB();
-
-  dfState[filename] = {
-    STATE: state,
-    info,
-  };
-
-  writeToDB(dfState);
-};
-
-async function getBody(req: IncomingMessage): Promise<string> {
-  return await new Promise((res) => {
-    const bodyParts: Uint8Array[] = [];
-    let body;
-    req
-      .on("data", (chunk) => {
-        bodyParts.push(chunk);
-      })
-      .on("end", () => {
-        body = Buffer.concat(bodyParts).toString();
-        res(body);
-      });
-  });
-}
 
 const bulkDownload = async (page: Page) => {
   const downloads: Download[] = [];
@@ -80,7 +41,6 @@ const bulkDownload = async (page: Page) => {
 
   const downloadLink = await page.$("a.download-btn");
   await downloadLink?.click({ timeout: 1000 });
-
   await page.waitForTimeout(5000);
 
   return downloads;
@@ -110,36 +70,42 @@ const uploadToDisk = async (files: Download[]) => {
     checkPathUrl.searchParams.append("path", "Chinese");
     checkPathUrl.searchParams.append("fields", "_embedded.items.name");
     checkPathUrl.searchParams.append("limit", "100");
-    const checkDirs = await fetch(checkPathUrl, {
-      headers: {
-        Authorization: AUTH_TOKEN,
-      },
-    });
-    if (!(checkDirs.ok && checkDirs.status === 200)) {
-      console.log("Error on checking dir -", fileObj, checkPathUrl);
-      console.log("checkDirs -", checkDirs);
+
+    let checkDirs;
+
+    try {
+      checkDirs = await axios.get<IExisitingDirs>(checkPathUrl.toString(), {
+        headers: AUTH_HEADER,
+      });
+    } catch (error) {
+      console.log("Error on checking dirs request -", fileObj, error);
       continue;
     }
-
-    const checkDirsRes: any = await checkDirs.json();
-    const isDirExist = checkDirsRes._embedded.items.find(
+    const isDirExist = checkDirs.data._embedded.items.find(
       (item: any) => item.name === fileObj.dirName
     );
 
     if (!isDirExist) {
       const createDirUrl = new URL(DISK_RES_URL);
       createDirUrl.searchParams.append("path", `/Chinese/${fileObj.dirName}`);
-      const createDirOp = await fetch(createDirUrl, {
-        method: "PUT",
-        headers: {
-          Authorization: AUTH_TOKEN,
-        },
-      });
 
-      if (!(createDirOp.ok && createDirOp.status === 201)) {
-        console.log("unable to create dir - ", fileObj);
+      try {
+        await axios.put(
+          createDirUrl.toString(),
+          undefined,
+          {
+            headers: AUTH_HEADER,
+          }
+        );
+      } catch (error) {
+         // @ts-ignore
+        console.log("unable to create dir - ", fileObj.filePath, error.data);
         continue;
       }
+
+      // if (!(createDirOp.ok && createDirOp.status === 201)) {
+
+      // }
     }
 
     console.log("starting to upload file");
@@ -147,19 +113,17 @@ const uploadToDisk = async (files: Download[]) => {
     const fetchUploadLinkUrl = new URL(UPLOAD_URL);
     fetchUploadLinkUrl.searchParams.append("path", fileObj.filePath);
 
-    const uploadLink = await fetch(fetchUploadLinkUrl, {
-      headers: {
-        Authorization: AUTH_TOKEN,
-      },
-    });
-    if (!(uploadLink.ok && uploadLink.status === 200)) {
-      console.log("unable to get upload link to ", uploadLink, fileObj);
+    let uploadLink;
+
+    try {
+      uploadLink = await axios.get<IUploadLink>(fetchUploadLinkUrl.toString(), {
+        headers: AUTH_HEADER,
+      });
+    } catch (error) {
+      console.log("unable to get upload link to ", fileObj, error);
       continue;
     }
-
-    const responseData: any = await uploadLink.json();
-
-    const uploadFileUrl = responseData.href;
+    const uploadFileUrl = uploadLink.data.href;
     const stats = statSync(fileObj.localPathToFile);
 
     const mimeType = mime.getType(fileObj.localPathToFile);
@@ -168,36 +132,43 @@ const uploadToDisk = async (files: Download[]) => {
     let start = Date.now();
 
     writeStateToDB(fileObj.filename, DOWNLOAD_STATE.UPLOADING);
+    let percentCompleted;
+    try {
+      const uploadFileOperation = await axios.put(
+        uploadFileUrl.toString(),
+        readStream,
+        {
+          headers: {
+            "Content-Type": mimeType,
+          },
+          onUploadProgress: (progressEvent) => {
+            // Расчет процента загруженного
+            percentCompleted = Math.round(
+              (progressEvent.loaded * 100) / stats.size
+            );
+            console.log(`Прогресс загрузки: ${percentCompleted}%`);
+          },
+        }
+      );
+    } catch (error) {
+      console.log(
+        `Didnt upload file to url - ${uploadFileUrl}, file - ${fileObj}`
+      );
 
-    const uploadFileOperation = await fetch(uploadFileUrl, {
-      method: "PUT",
-      headers: {
-        // "Content-Length": `${fileSizeInBytes}`,
-        "Content-Type": mimeType || "",
-      },
-      // @ts-ignore
-      body: readStream,
-      duplex: "half",
-    });
+      writeStateToDB(fileObj.filename, DOWNLOAD_STATE.ERROR, {
+        info: `ERROR HAPPENED ON percentCompleted - ${percentCompleted}`,
+      });
+      continue;
+    }
 
     console.log("Uploaded file");
     let end = Date.now();
 
     let elapsed = (end - start) / 1000;
 
-
-    if (uploadFileOperation.status !== 201) {
-      console.log(
-        `Didnt upload file to url - ${uploadFileUrl}, file - ${fileObj}`,
-        uploadFileOperation
-      );
-
-      writeStateToDB(fileObj.filename, DOWNLOAD_STATE.ERROR);
-
-      continue;
-    }
-
-    writeStateToDB(fileObj.filename, DOWNLOAD_STATE.SAVED, {time: elapsed});
+    writeStateToDB(fileObj.filename, DOWNLOAD_STATE.SAVED, {
+      info: `TIME OF UPLOAD - ${elapsed}`,
+    });
   }
 };
 
@@ -208,9 +179,8 @@ const downloadHandler: IRouteHandler = async (req, res) => {
   res.statusCode = 200;
   res.setHeader("Content-Type", "text/plain");
   res.end("Request for download accepted \n");
-  const dfState = readFromDB();
 
-  const browser = await chromium.launch({ headless: false });
+  const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext();
   const page = await context.newPage();
   await page.goto(bodyJsonParsed.url);
@@ -237,6 +207,7 @@ const downloadHandler: IRouteHandler = async (req, res) => {
 
   const downloads: Download[] = await bulkDownload(page);
 
+  const dfState = readFromDB();
   const needToDownload = downloads.reduce<Download[]>((acc, download) => {
     const filename = download.suggestedFilename();
     if (
